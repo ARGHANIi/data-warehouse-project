@@ -1,11 +1,11 @@
 # data-warehouse-project
 Building a modern Data Warehouse with SQL Server, including ETL Processes , Data modeling and analytics
 
-🚀 Project Requirements
+##🚀 Project Requirements
 
 
 
-### **Building the Data Warehouse (Data Engineering)**
+## **Building the Data Warehouse (Data Engineering)**
 
 
 
