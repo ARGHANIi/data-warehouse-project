@@ -7,7 +7,10 @@ Building a modern Data Warehouse with SQL Server, including ETL Processes , Data
 
 ## **Building the Data Warehouse (Data Engineering)**
 
+
+
 Develop a modern Data Warehouse using SQL Server to consolidate sales data , enabling analytical reporting and informed decision-making .
+
 
 ### **specifications :**
 
