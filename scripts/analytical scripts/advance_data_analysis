@@ -1,0 +1,142 @@
+--<<Change-Over-Time>>
+
+select 
+  year(order_date),
+  month(order_date),
+  sum(sales_amount),
+  count(Distinct customer_key),
+  sum(quantity)
+from Gold.fact_sales
+group by year(order_date),month(order_date)
+order by year(order_date),month(order_date)
+-------------
+
+select 
+  Year(order_date) AS Order_year,
+  Datetrunc(Month,order_date) AS Order_month,
+  sum(sales_amount)As Total_sales,
+  count(Distinct customer_key) AS Total_customers,
+  sum(quantity) AS Total_quantity
+from Gold.fact_sales
+group by Year(order_date),Datetrunc(Month,order_date)
+order by Year(order_date),Datetrunc(Month,order_date)
+
+------------------------------------------------------
+--<<Cumulative Analysis>>
+select 
+  Order_date,
+  Total_sales,
+  sum(Total_sales) Over (Order by Order_date)
+from
+(
+	select 
+  	Datetrunc(Month,order_date) AS Order_date,
+  	sum(sales_amount)As Total_sales
+	from Gold.fact_sales
+	group by Datetrunc(Month,order_date)
+)t
+
+------------------------------------------------
+--<<Performance Analysis>>
+
+/*Analyze the yearly performance of products by comparing their sales 
+to both the average sales performance of the product and the previous yearss sales*/
+
+ With yearly_products_sales as(
+	 select 
+  		year(s.order_date) AS order_year,
+  		p.product_name,
+  		Sum(s.sales_amount)AS current_sales
+	 from Gold.fact_sales s
+	 left join Gold.dim_products p
+	 on p.product_key = s.product_key
+	 where s.order_date is not null
+	 group by year(s.order_date),p.product_name
+ )
+ select
+	 order_year,
+	 product_name,
+	 current_sales,
+	 AVG(current_sales) OVER (PARTITION BY product_name) AS average_sales,
+	 CASE  
+		WHEN current_sales - AVG(current_sales) OVER (PARTITION BY product_name)< 0 Then 'Below AVG'
+		When current_sales - AVG(current_sales) OVER (PARTITION BY product_name)> 0 Then 'Above AVG'
+		Else 'AVG'
+	END avg_change,
+	CASE  
+		WHEN current_sales - LAG(current_sales) OVER (PARTITION BY product_name ORDER BY order_year)< 0 Then 'Decrease'
+		When current_sales - LAG(current_sales) OVER (PARTITION BY product_name ORDER BY order_year)> 0 Then 'Increase'
+		Else 'No Change'
+	END py_change
+ from yearly_products_sales
+
+ ------------------------------------------------------------
+ --<<Part_to_whole Analysis>>
+
+ --Which categories contribute the most to the overall sales?
+ With category_sales AS(
+ select 
+   p.category,
+   Sum(s.sales_amount) AS cat_sales
+ from Gold.fact_sales s
+ left join Gold.dim_products p
+ on p.product_key = s.product_key
+ group by category
+ )
+ select
+   category,
+   cat_sales,
+   Sum(cat_sales) OVER () AS Total_sales,
+   Concat(Round((Cast(cat_sales As Float)/Sum(cat_sales) OVER ()*100),2),'%'')AS percentage_of_total
+ from category_sales
+
+ ------------------------------------------------------------------
+ --<<Data Segmentation>>
+
+ /*Segment products into cost ranges asd count 
+ how many products fall into each segment*/
+ 
+ With product_segment AS(
+ select 
+   product_key,
+   product_name,
+   cost,
+   CASE When cost <100 Then 'Below 100'
+  	  When cost Between 100 and 500 Then '100_500'
+  	  When cost Between 500 and 1000 Then '500_1000'
+  	  Else 'Above 1000'
+   END cost_range
+ from Gold.dim_products
+)
+select
+  cost_range,
+  Count(product_key) 
+from product_segment
+group by cost_range
+ ----------------------------------------------------------------------------
+
+ --Group customers into three segment based on their spending behavior :
+	/*
+  -VIP: Customers with atleast 12 months of history and spending more then $5,000 .
+	-Regular:  Customers with atleast 12 months of history but spending $5,000 or less .
+	-New: Customers with lifespan less than 12 months .
+And find the total number of customers by each group .*/
+
+With customer_segment AS(
+  select 
+    c.customer_id,
+    CASE WHEN SUM(s.sales_amount) >5000  and DATEDIFF(month,MIN(order_date) , MAX(order_date)) >=12 Then 'VIP'
+    	 WHEN SUM(s.sales_amount) <= 5000 and DATEDIFF(month,MIN(order_date) , MAX(order_date)) >=12 Then 'Regular'
+    	 WHEN  DATEDIFF(month,MIN(order_date) , MAX(order_date)) < 12 Then 'New'
+    	 Else 'n/a'
+    END sales_segment
+  from Gold.fact_sales s
+  left join Gold.dim_customers c
+  on s.customer_key = c.customer_key
+  group by c.customer_id
+)
+select
+  sales_segment,
+  count(customer_id) AS quantity
+from customer_segment
+group by sales_segment
