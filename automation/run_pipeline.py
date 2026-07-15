@@ -1,6 +1,7 @@
 import pyodbc
 import logging
 import time
+import os
 
 # ==========================
 # Database Configuration
@@ -17,6 +18,8 @@ connection_string = (
 #================================
 # Logging
 #================================
+os.makedirs("logs", exist_ok=True)
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)s | %(message)s",
